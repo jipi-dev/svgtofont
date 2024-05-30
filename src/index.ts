@@ -124,6 +124,11 @@ export type SvgToFontOptions = {
    */
   emptyDist?: boolean;
   /**
+   * Force !important in codepoints
+   * @default false
+   */
+    forceImportant?: boolean;
+  /**
    * This is the setting for [svg2ttf](https://github.com/fontello/svg2ttf/tree/c33a126920f46b030e8ce960cc7a0e38a6946bbc#svg2ttfsvgfontstring-options---buf)
    */
   svg2ttf?: FontOptions;
@@ -262,8 +267,10 @@ export default async (options: SvgToFontOptions = {}) => {
     let cssIconHtml: string[] = [];
     let unicodeHtml: string[] = [];
     let symbolHtml: string[] = [];
+    let arrayWithNames: string[] = [];
     const prefix = options.classNamePrefix || options.fontName;
     const infoData: InfoData = {}
+    const important: string = options.forceImportant ? ' !important' : '';
 
     Object.keys(unicodeObject).forEach((name, index, self) => {
       if (!infoData[name]) infoData[name] = {};
@@ -271,6 +278,8 @@ export default async (options: SvgToFontOptions = {}) => {
       let symbolName = options.classNamePrefix + options.symbolNameDelimiter + name
       let iconPart = symbolName + '">';
       let encodedCodes: string | number = _code.charCodeAt(0);
+      arrayWithNames.push(`.${symbolName}`)
+
 
       if (options.useNameAsUnicode) {
         symbolName = name;
@@ -281,10 +290,10 @@ export default async (options: SvgToFontOptions = {}) => {
         if (options.useCSSVars) {
           if (index === 0) cssRootVars.push(`:root {\n`)
           cssRootVars.push(`--${symbolName}: "\\${encodedCodes.toString(16)}";\n`);
-          cssString.push(`.${symbolName}:before { content: var(--${symbolName}); }\n`);
+          cssString.push(`.${symbolName}:before { content: var(--${symbolName})${important}; }\n`);
           if (index === self.length - 1) cssRootVars.push(`}\n`)
         } else {
-          cssString.push(`.${symbolName}:before { content: "\\${encodedCodes.toString(16)}"; }\n`);
+          cssString.push(`.${symbolName}:before { content: "\\${encodedCodes.toString(16)}"${important}; }\n`);
         }
       }
       infoData[name].encodedCode = `\\${encodedCodes.toString(16)}`;
@@ -302,11 +311,25 @@ export default async (options: SvgToFontOptions = {}) => {
         </li>
       `);
     });
+    const combinedClasses = arrayWithNames.join(',')
+    const finalArrayClasses = `${combinedClasses} {
+      font-family: ${options.fontName};
+      display: inline-block;
+      font-weight: normal;
+      font-style: normal;
+      speak: none;
+      text-decoration: inherit;
+      text-transform: none;
+      text-rendering: auto;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }`;
+
+    cssString = [finalArrayClasses, ...cssString]
 
     if (options.useCSSVars) {
       cssString = [...cssRootVars, ...cssString]
     }
-
     if (options.generateInfoData) {
       await fs.writeJSON(infoDataPath, infoData, { spaces: 2 });
       log.log(`${color.green('SUCCESS')} Created ${infoDataPath} `);
